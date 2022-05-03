@@ -47,25 +47,27 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapGet("/books", async (string? searchTerm, IBookService bookService)
-    => Results.Ok(await bookService.SearchAsync(searchTerm)));
+    => Results.Ok(await bookService.SearchAsync(searchTerm))).WithName("GetBooks");
 
 app.MapGet("/books/{isbn}", async (string isbn, IBookService bookService)
     => await bookService.GetByIsbnAsync(isbn) switch
         {
             {} book => Results.Ok(book),
             _       => Results.NotFound()
-        });
+        }).WithName("GetBook");
 
-app.MapPost("/books", async (Book book, IBookService bookService, IValidator<Book> validator)
+app.MapPost("/books", async (Book book, IBookService bookService, IValidator<Book> validator, LinkGenerator linker, HttpContext context)
     => await validator.ValidateAsync(book) switch
         {
             { IsValid: true } => await bookService.CreateAsync(book) switch
                 {
-                    true  => Results.Created($"/books/{book.Isbn}", book),
+                    // true  => Results.Created($"/books/{book.Isbn}", book),
+                    // true  => Results.CreatedAtRoute("GetBook", new { isbn = book.Isbn }, book),
+                    true  => Results.Created(linker.GetUriByName(context, "GetBook", new { isbn = book.Isbn })!, book),
                     false => Results.BadRequest("Book not added, because it already exists in the library")
                 },
             var result        => Results.BadRequest(result.Errors.ToResponse())
-        });
+        }).WithName("CreateBook");
 
 app.MapPut("/books/{isbn}", async (string isbn, Book book, IBookService bookService, IValidator<Book> validator)
     => await validator.ValidateAsync(book with { Isbn = isbn }) switch
@@ -76,14 +78,14 @@ app.MapPut("/books/{isbn}", async (string isbn, Book book, IBookService bookServ
                     false => Results.NotFound("Book not updated, because it does not exist in the library")
                 },
             var result        => Results.BadRequest(result.Errors.ToResponse())
-        });
+        }).WithName("UpdateBook");
 
 app.MapDelete("/books/{isbn}", async (string isbn, IBookService bookService)
     => await bookService.DeleteAsync(isbn) switch
         {
             true  => Results.NoContent(),
             false => Results.NotFound("Book not deleted, because it does not exist in the library")
-        });
+        }).WithName("DeleteBook");
 
 app.Run();
 
