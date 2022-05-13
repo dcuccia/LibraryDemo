@@ -3,6 +3,8 @@ using Library.WebApi.Endpoints.Internal;
 using Library.WebApi.Filters;
 using Library.WebApi.Models;
 using Library.WebApi.Services;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Library.WebApi.Endpoints;
 
@@ -10,31 +12,18 @@ public class LibraryEndpoints : IEndpoints
 {
     public static void DefineEndpoints(IEndpointRouteBuilder app)
     {
-        app.MapGet("/books", async (string? searchTerm, IBookService bookService)
-            => Results.Ok(await bookService.SearchAsync(searchTerm)))
+        app.MapGet("/books", GetBooksAsync)
             .WithName("GetBooks")
             .WithTags("Books")
             .Produces<List<Book>>(StatusCodes.Status200OK);
 
-        app.MapGet("/books/{isbn}", async (string isbn, IBookService bookService)
-            => await bookService.GetByIsbnAsync(isbn) switch
-                {
-                    {} book => Results.Ok(book),
-                    _       => Results.NotFound()
-                })
+        app.MapGet("/books/{isbn}", GetBookAsync)
             .WithName("GetBook")
             .WithTags("Books")
             .Produces<Book>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);
 
-        app.MapPost("/books", async (Book book, IBookService bookService) //, LinkGenerator linker, HttpContext context)
-            => await bookService.CreateAsync(book) switch
-                {
-                    // true  => Results.Created($"/books/{book.Isbn}", book),
-                    true  => Results.CreatedAtRoute("GetBook", new { isbn = book.Isbn }, book),
-                    // true  => Results.Created(linker.GetUriByName(context, "GetBook", new { isbn = book.Isbn })!, book),
-                    false => Results.BadRequest(new CreationFailureResponse("Book not added, because it already exists in the library"))
-                })
+        app.MapPost("/books", CreateBookAsync)
             .AddFilter<ValidationFilter<Book>>()
             .WithName("CreateBook")
             .WithTags("Books")
@@ -43,12 +32,7 @@ public class LibraryEndpoints : IEndpoints
             .Produces<CreationFailureResponse>(StatusCodes.Status400BadRequest)
             .Produces<ValidationFailureResponse>(StatusCodes.Status400BadRequest);
 
-        app.MapPut("/books/{isbn}", async (string isbn, Book book, IBookService bookService)
-            => await bookService.UpdateAsync(book with { Isbn = isbn }) switch
-                {
-                    true  => Results.Ok("Book updated!"),
-                    false => Results.NotFound(new UpdateFailureResponse("Book not updated, because it does not exist in the library"))
-                })
+        app.MapPut("/books/{isbn}", UpdateBookAsync)
             .AddFilter<ValidationFilter<Book>>()
             .WithName("UpdateBook")
             .WithTags("Books")
@@ -57,17 +41,51 @@ public class LibraryEndpoints : IEndpoints
             .Produces<UpdateFailureResponse>(StatusCodes.Status404NotFound)
             .Produces<ValidationFailureResponse>(StatusCodes.Status400BadRequest);
 
-        app.MapDelete("/books/{isbn}", async (string isbn, IBookService bookService)
-            => await bookService.DeleteAsync(isbn) switch
-                {
-                    true  => Results.NoContent(),
-                    false => Results.NotFound("Book not deleted, because it does not exist in the library")
-                })
+        app.MapDelete("/books/{isbn}", DeleteBookAsync)
             .WithName("DeleteBook")
             .WithTags("Books")
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
     }
+
+    internal static async ValueTask<Ok<List<Book>>> GetBooksAsync(string? searchTerm, IBookService bookService)
+        => TypedResults.Ok(await bookService.SearchAsync(searchTerm));
+
+    internal static async ValueTask<Results<Ok<Book>, NotFound>>  GetBookAsync(string isbn, IBookService bookService)
+        => await bookService.GetByIsbnAsync(isbn) switch
+        {
+            { } book => TypedResults.Ok(book),
+            _        => TypedResults.NotFound()
+        };
+
+    internal static async ValueTask<Results<CreatedAtRoute<Book>, BadRequest<CreationFailureResponse>, NotFound>> 
+        CreateBookAsync(Book book, IBookService bookService) //, LinkGenerator linker, HttpContext context)
+            => await bookService.CreateAsync(book) switch
+            {
+                // true  => TypedResults.Created($"/books/{book.Isbn}", book),
+                true  => TypedResults.CreatedAtRoute(book, "GetBook", new {isbn = book.Isbn}),
+                // true  => TypedResults.Created(linker.GetUriByName(context, "GetBook", new { isbn = book.Isbn })!, book),
+                false => TypedResults.BadRequest(
+                    new CreationFailureResponse("Book not added, because it already exists in the library"))
+            };
+
+    internal static async ValueTask<Results<Ok, NotFound<UpdateFailureResponse>>>
+        UpdateBookAsync(string isbn, Book book, IBookService bookService)
+            => await bookService.UpdateAsync(book with {Isbn = isbn}) switch
+            {
+                true  => TypedResults.Ok(),
+                false => TypedResults.NotFound(
+                    new UpdateFailureResponse("Book not updated, because it does not exist in the library"))
+            };
+
+    internal static async ValueTask<Results<NoContent, NotFound<DeletionFailureResponse>>>
+        DeleteBookAsync(string isbn, IBookService bookService)
+            => await bookService.DeleteAsync(isbn) switch
+            {
+                true  => TypedResults.NoContent(),
+                false => TypedResults.NotFound(
+                    new DeletionFailureResponse("Book not deleted, because it does not exist in the library"))
+            };
 
     public static void AddServices(IServiceCollection services, IConfiguration configuration)
     {
