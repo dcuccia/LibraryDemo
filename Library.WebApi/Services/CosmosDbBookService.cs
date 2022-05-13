@@ -31,7 +31,7 @@ public class CosmosDbBookService : IBookService
         if(await _repository.ExistsAsync(isbn))
             return false;
 
-        _repository.DeleteAsync(isbn);
+        await _repository.DeleteAsync(isbn);
         return true;
     }
 

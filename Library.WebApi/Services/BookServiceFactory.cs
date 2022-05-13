@@ -8,7 +8,7 @@ public class BookServiceFactory
 {
     private readonly IServiceProvider _provider;
     private readonly IOptions<DatabaseOptions>? _options;
-
+    
     public BookServiceFactory(IServiceProvider provider, IOptions<DatabaseOptions>? options = null)
         => (_provider, _options) = (provider, options);
 
