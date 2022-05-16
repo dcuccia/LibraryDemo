@@ -1,4 +1,4 @@
-﻿namespace Library.WebApi.Models;
+﻿namespace Library.WebApi.Models.FailureResponses;
 
 public class UpdateFailureResponse
 {

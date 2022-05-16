@@ -1,5 +1,5 @@
 ﻿using FluentValidation;
-using Library.WebApi.Models;
+using Library.WebApi.Models.FailureResponses;
 
 namespace Library.WebApi.Filters;
 

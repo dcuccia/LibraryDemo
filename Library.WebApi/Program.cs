@@ -1,3 +1,5 @@
+using FluentValidation;
+using Library.WebApi;
 using Library.WebApi.Endpoints.Internal;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,7 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddEndpointsForAssemblyContaining<Program>(builder.Configuration);
+builder.Services.AddEndpointsForAssemblyContaining<IApiMarker>(builder.Configuration);
+builder.Services.AddValidatorsFromAssemblyContaining<IApiMarker>();
 
 var app = builder.Build();
 

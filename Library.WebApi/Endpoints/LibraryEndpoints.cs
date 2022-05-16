@@ -1,54 +1,54 @@
-﻿using FluentValidation;
-using Library.WebApi.Endpoints.Internal;
+﻿using Library.WebApi.Endpoints.Internal;
 using Library.WebApi.Filters;
 using Library.WebApi.Models;
+using Library.WebApi.Models.FailureResponses;
 using Library.WebApi.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Mvc;
 
 namespace Library.WebApi.Endpoints;
 
 public class LibraryEndpoints : IEndpoints
 {
+    private const string ContentType = "application/json";
+    private const string Tag = "Books";
+    private const string BaseRoute = "books";
     public static void DefineEndpoints(IEndpointRouteBuilder app)
     {
-        app.MapGet("/books", GetBooksAsync)
+        app.MapGet(BaseRoute, GetAllBooksAsync)
             .WithName("GetBooks")
-            .WithTags("Books")
+            .WithTags(Tag)
             .Produces<List<Book>>(StatusCodes.Status200OK);
 
-        app.MapGet("/books/{isbn}", GetBookAsync)
+        app.MapGet($"{BaseRoute}/{{isbn}}", GetBookAsync)
             .WithName("GetBook")
-            .WithTags("Books")
-            .Produces<Book>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+            .WithTags(Tag)
+            .Produces<Book>(StatusCodes.Status200OK).Produces(StatusCodes.Status404NotFound);
 
-        app.MapPost("/books", CreateBookAsync)
+        app.MapPost(BaseRoute, CreateBookAsync)
             .AddFilter<ValidationFilter<Book>>()
             .WithName("CreateBook")
-            .WithTags("Books")
-            .Accepts<Book>("application/json")
+            .WithTags(Tag)
+            .Accepts<Book>(ContentType)
             .Produces<Book>(StatusCodes.Status201Created)
-            .Produces<CreationFailureResponse>(StatusCodes.Status400BadRequest)
-            .Produces<ValidationFailureResponse>(StatusCodes.Status400BadRequest);
+                .Produces<CreationFailureResponse>(StatusCodes.Status400BadRequest)
+                .Produces<ValidationFailureResponse>(StatusCodes.Status400BadRequest);
 
-        app.MapPut("/books/{isbn}", UpdateBookAsync)
+        app.MapPut($"{BaseRoute}/{{isbn}}", UpdateBookAsync)
             .AddFilter<ValidationFilter<Book>>()
             .WithName("UpdateBook")
-            .WithTags("Books")
-            .Accepts<Book>("application/json")
+            .WithTags(Tag)
+            .Accepts<Book>(ContentType)
             .Produces(StatusCodes.Status200OK)
-            .Produces<UpdateFailureResponse>(StatusCodes.Status404NotFound)
-            .Produces<ValidationFailureResponse>(StatusCodes.Status400BadRequest);
+                .Produces<UpdateFailureResponse>(StatusCodes.Status404NotFound)
+                .Produces<ValidationFailureResponse>(StatusCodes.Status400BadRequest);
 
-        app.MapDelete("/books/{isbn}", DeleteBookAsync)
+        app.MapDelete($"{BaseRoute}/{{isbn}}", DeleteBookAsync)
             .WithName("DeleteBook")
-            .WithTags("Books")
-            .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status404NotFound);
+            .WithTags(Tag)
+            .Produces(StatusCodes.Status204NoContent).Produces(StatusCodes.Status404NotFound);
     }
 
-    internal static async ValueTask<Ok<List<Book>>> GetBooksAsync(string? searchTerm, IBookService bookService)
+    internal static async ValueTask<Ok<List<Book>>> GetAllBooksAsync(string? searchTerm, IBookService bookService)
         => TypedResults.Ok(await bookService.SearchAsync(searchTerm));
 
     internal static async ValueTask<Results<Ok<Book>, NotFound>>  GetBookAsync(string isbn, IBookService bookService)
@@ -62,7 +62,7 @@ public class LibraryEndpoints : IEndpoints
         CreateBookAsync(Book book, IBookService bookService) //, LinkGenerator linker, HttpContext context)
             => await bookService.CreateAsync(book) switch
             {
-                // true  => TypedResults.Created($"/books/{book.Isbn}", book),
+                // true  => TypedResults.Created($"{BaseRoute}/{book.Isbn}", book),
                 true  => TypedResults.CreatedAtRoute(book, "GetBook", new {isbn = book.Isbn}),
                 // true  => TypedResults.Created(linker.GetUriByName(context, "GetBook", new { isbn = book.Isbn })!, book),
                 false => TypedResults.BadRequest(
@@ -111,7 +111,5 @@ public class LibraryEndpoints : IEndpoints
         services.AddSingleton<CosmosDbBookService>();
         services.AddSingleton<BookServiceFactory>();
         services.AddSingleton<IBookService>(provider => provider.GetRequiredService<BookServiceFactory>().GetBookService());
-        
-        services.AddValidatorsFromAssemblyContaining<Program>();
     }
 }
