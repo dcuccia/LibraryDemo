@@ -23,7 +23,7 @@ public class InMemoryBookService : IBookService
     public async ValueTask<Book?> GetByIsbnAsync(string isbn) => await Task.FromResult(
         _books.TryGetValue(isbn, out var book) switch
         {
-            true => book,
+            true  => book,
             false => null
         });
     public async ValueTask<List<Book>> SearchAsync(string? searchTerm) => await Task.FromResult(
@@ -36,5 +36,4 @@ public class InMemoryBookService : IBookService
                     book.Title.Contains(searchTerm, StringComparison.CurrentCultureIgnoreCase)).ToList(),
             _   => _books.Values.ToList(),
         });
-    public async ValueTask<List<Book>> GetAllAsync() => await SearchAsync("");
 }

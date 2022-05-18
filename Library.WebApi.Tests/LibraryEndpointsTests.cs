@@ -1,14 +1,14 @@
 ﻿using Library.WebApi.Models;
 using Library.WebApi.Models.FailureResponses;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Library.WebApi.Tests;
 
-public class LibraryEndpointsTests : IClassFixture<WebApplicationFactory<IApiMarker>>
+public class LibraryEndpointsTests : IClassFixture<LibraryApiFactory>, IAsyncLifetime
 {
-    private readonly WebApplicationFactory<IApiMarker> _factory;
+    private readonly LibraryApiFactory _factory;
+    private readonly List<string> _createdIsbns = new();
 
-    public LibraryEndpointsTests(WebApplicationFactory<IApiMarker> factory)
+    public LibraryEndpointsTests(LibraryApiFactory factory)
     {
         _factory = factory;
     }
@@ -22,6 +22,7 @@ public class LibraryEndpointsTests : IClassFixture<WebApplicationFactory<IApiMar
 
         // Act
         var result = await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
         var createdBook = await result.Content.ReadFromJsonAsync<Book>();
         
         // Assert
@@ -39,6 +40,7 @@ public class LibraryEndpointsTests : IClassFixture<WebApplicationFactory<IApiMar
         
         // Act
         var result = await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
         var validationFailureResponse = await result.Content.ReadFromJsonAsync<ValidationFailureResponse>();
         var error = validationFailureResponse!.Errors.Single();
 
@@ -53,10 +55,11 @@ public class LibraryEndpointsTests : IClassFixture<WebApplicationFactory<IApiMar
     {
         // Arrange
         var httpClient = _factory.CreateClient();
-        var book = GenerateBook() with { Isbn = "300-1234567890" };
+        var book = GenerateBook();
+        await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
         
         // Act
-        await httpClient.PostAsJsonAsync("/books", book);
         var result = await httpClient.PostAsJsonAsync("/books", book);
         var validationFailureResponse = await result.Content.ReadFromJsonAsync<CreationFailureResponse>();
         var error = validationFailureResponse!.Errors.Single();
@@ -66,6 +69,178 @@ public class LibraryEndpointsTests : IClassFixture<WebApplicationFactory<IApiMar
         error.Should().Be("Book not added, because it already exists in the library");
     }
 
+    [Fact]
+    public async Task GetBook_ReturnsBook_WhenBookExists()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var book = GenerateBook();
+        await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
+        
+        // Act
+        var result = await httpClient.GetAsync($"/books/{book.Isbn}");
+        var existingBook = await result.Content.ReadFromJsonAsync<Book>();
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.OK);
+        existingBook.Should().BeEquivalentTo(book);
+    }
+    
+    [Fact]
+    public async Task GetBook_ReturnsNotFound_WhenBookDoesNotExist()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var isbn = GenerateIsbn();
+        
+        // Act
+        var result = await httpClient.GetAsync(isbn);
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetAllBooks_ReturnsAllBooks_WhenBooksExist()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var book = GenerateBook();
+        await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
+        var books = new List<Book> { book };
+        
+        // Act
+        var result = await httpClient.GetAsync("/books");
+        var returnedBooks = await result.Content.ReadFromJsonAsync<List<Book>>();
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.OK);
+        returnedBooks.Should().BeEquivalentTo(books);
+    }
+    
+    [Fact]
+    public async Task GetAllBooks_ReturnsNoBooks_WhenNoBooksExist()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        
+        // Act
+        var result = await httpClient.GetAsync("/books");
+        var returnedBooks = await result.Content.ReadFromJsonAsync<List<Book>>();
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.OK);
+        returnedBooks.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchBooks_ReturnsBooks_WhenTitleMatches()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var book = GenerateBook();
+        await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
+        var books = new List<Book> { book };
+        
+        // Act
+        var result = await httpClient.GetAsync($"/books?searchTerm=eye");
+        var returnedBooks = await result.Content.ReadFromJsonAsync<List<Book>>();
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.OK);
+        returnedBooks!.First().Should().BeEquivalentTo(book);
+    }
+    
+    [Fact]
+    public async Task UpdateBook_UpdatesBook_WhenDataIsCorrect()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var book = GenerateBook();
+        await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
+
+        // Act
+        var updatedBook = book with { Title = "The Great Hunt" };
+        var result = await httpClient.PutAsJsonAsync($"/books/{updatedBook.Isbn}", updatedBook);
+        var returnedBook = await result.Content.ReadFromJsonAsync<Book>();
+        
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.OK);
+        returnedBook.Should().BeEquivalentTo(updatedBook);
+    }
+    
+    [Fact]
+    public async Task UpdateBook_DoesNotUpdateBook_WhenDataIsIncorrect()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var book = GenerateBook();
+        await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
+        
+        // Act
+        var updatedBook = book with { Title = string.Empty };
+        var result = await httpClient.PutAsJsonAsync($"/books/{updatedBook.Isbn}", updatedBook);
+        var validationFailureResponse = await result.Content.ReadFromJsonAsync<ValidationFailureResponse>();
+        var error = validationFailureResponse!.Errors.Single();
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        error.ProperyName.Should().Be("Title");
+        error.ErrorMessage.Should().Be("'Title' must not be empty.");
+    }
+
+    [Fact]
+    public async Task UpdateBook_ReturnsNotFound_WhenBookDoesNotExist()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var book = GenerateBook();
+        
+        // Act
+        var result = await httpClient.PutAsJsonAsync($"/books/{book.Isbn}", book);
+        var updateFailureResponse = await result.Content.ReadFromJsonAsync<UpdateFailureResponse>();
+        var error = updateFailureResponse!.Errors.Single();
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        error.Should().Be("Book not updated, because it does not exist in the library");
+    }
+    
+    [Fact]
+    public async Task DeleteBook_ReturnsNotFound_WhenBookDoesNotExist()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var isbn = GenerateIsbn();
+        
+        // Act
+        var result = await httpClient.DeleteAsync($"/books/{isbn}");
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+    
+    [Fact]
+    public async Task DeleteBook_ReturnsNoContent_WhenBookDoesExist()
+    {
+        // Arrange
+        var httpClient = _factory.CreateClient();
+        var book = GenerateBook();
+        await httpClient.PostAsJsonAsync("/books", book);
+        _createdIsbns.Add(book.Isbn);
+        
+        // Act
+        var result = await httpClient.DeleteAsync($"/books/{book.Isbn}");
+
+        // Assert
+        result.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+    
     private Book GenerateBook(string title = "The Eye of the World")
         => new Book
         {
@@ -79,4 +254,15 @@ public class LibraryEndpointsTests : IClassFixture<WebApplicationFactory<IApiMar
 
     private string GenerateIsbn()
         => $"{Random.Shared.Next(100, 999)}-" + $"{Random.Shared.Next(1000000000, 2100999999)}";
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        var httpClient = _factory.CreateClient();
+        foreach (var createdIsbn in _createdIsbns)
+        {
+            await httpClient.DeleteAsync($"/books/{createdIsbn}");
+        }
+    }
 }

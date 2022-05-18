@@ -54,8 +54,6 @@ public class CosmosDbBookService : IBookService
                     .ToList()
         };
     }
-
-    public async ValueTask<List<Book>> GetAllAsync() => await SearchAsync("");
     
     private class BookMatchingSearchTermSpecification: DefaultSpecification<CosmosDbBook>
     {

@@ -10,5 +10,4 @@ public interface IBookService
     ValueTask<bool> DeleteAsync(string isbn);
     ValueTask<Book?> GetByIsbnAsync(string isbn);
     ValueTask<List<Book>> SearchAsync(string? searchTerm);
-    ValueTask<List<Book>> GetAllAsync();
 }

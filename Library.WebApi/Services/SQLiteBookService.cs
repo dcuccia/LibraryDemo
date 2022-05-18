@@ -61,6 +61,4 @@ public class SQLiteBookService : IBookService
             _   => await _db.Table<Book>().ToListAsync()
         };
     }
-
-    public async ValueTask<List<Book>> GetAllAsync() => await SearchAsync("");
 }
