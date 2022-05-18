@@ -55,6 +55,27 @@ public class CosmosDbBookService : IBookService
         };
     }
     
+    public static void AddServices(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions();
+        services.AddCosmosRepository(
+            options =>
+            {
+                options.CosmosConnectionString = configuration.GetValue<string>("DatabaseOptions:ConnectionString");
+                options.ContainerId = "book-store";
+                options.DatabaseId = "library";
+                options.ContainerPerItemType = true;
+                options.ContainerBuilder.Configure<CosmosDbBook>(containerOptions => containerOptions
+                    .WithContainer("books")
+                    .WithPartitionKey("/isbn")
+                    // .WithContainerDefaultTimeToLive(TimeSpan.FromMinutes(1))
+                    // .WithManualThroughput(500)
+                    .WithSyncableContainerProperties()
+                );
+            });
+        services.AddSingleton<CosmosDbBookService>();
+    }
+    
     private class BookMatchingSearchTermSpecification: DefaultSpecification<CosmosDbBook>
     {
         public BookMatchingSearchTermSpecification(string searchTerm)

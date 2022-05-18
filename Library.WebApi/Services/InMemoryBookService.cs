@@ -36,4 +36,11 @@ public class InMemoryBookService : IBookService
                     book.Title.Contains(searchTerm, StringComparison.CurrentCultureIgnoreCase)).ToList(),
             _   => _books.Values.ToList(),
         });
+    
+    public static void AddServices(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions();
+        services.Configure<DatabaseOptions>(configuration.GetSection("DatabaseOptions"));
+        services.AddSingleton<InMemoryBookService>();
+    }
 }
